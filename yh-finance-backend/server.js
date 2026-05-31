@@ -292,7 +292,15 @@ app.get('/api/stock/:ticker', authenticateToken, apiLimiter, async (req, res) =>
 
     } catch (error) {
         console.error(`Error processing request for ${ticker}:`, error.message);
-        res.status(404).json({ error: error.message || "Failed to fetch stock data." });
+        
+        await triggerIncident(
+            `Main Scraper Failed for [${ticker}]`,
+            `Yahoo Finance returned an error: ${error.message}`,
+            'warning', 
+            'Main-Search-API'
+        );
+
+        res.status(404).json({ error: `Could not load data for ${ticker}. Please try again later.` });
     }
 });
 
@@ -330,6 +338,19 @@ app.get('/api/admin/incidents', authenticateToken, async (req, res) => {
         res.json(incidents);
     } catch (err) {
         res.status(500).json({ error: "Failed to fetch system logs" });
+    }
+});
+
+app.post('/api/admin/incidents/:id/acknowledge', authenticateToken, apiLimiter, async (req, res) => {
+    try {
+        const updated = await Incident.findByIdAndUpdate(
+            req.params.id,
+            { status: 'acknowledged' },
+            { new: true }
+        );
+        res.json({ message: "Incident acknowledged (Silenced)", updated });
+    } catch (err) {
+        res.status(500).json({ error: "Could not acknowledge incident" });
     }
 });
 
