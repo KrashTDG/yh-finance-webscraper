@@ -1,28 +1,69 @@
-import { useState, useEffect } from 'react';
+// App.tsx
+import React, { useState, useEffect, FormEvent } from 'react';
+
+// --- FRONTEND INTERFACES ---
+interface NewsArticle {
+  title: string;
+  link: string;
+  publisher: string;
+}
+
+interface StockData {
+  source: 'cache' | 'live';
+  ticker: string;
+  price: string;
+  change: string;
+  changePercent: string;
+  news: NewsArticle[];
+  updatedAt?: string;
+}
+
+interface TopStock {
+  ticker: string;
+  price: string;
+  change: string;
+  changePercent: string;
+}
+
+interface Incident {
+  _id: string;
+  title: string;
+  description: string;
+  source: string;
+  severity: 'info' | 'warning' | 'critical';
+  status: 'triggered' | 'acknowledged' | 'resolved';
+  createdAt: string;
+}
+
+interface ActiveArticle {
+  title: string;
+  publisher: string;
+  url: string;
+  content: string[] | null;
+}
 
 function App() {
-  const [token, setToken] = useState(localStorage.getItem('token') || '');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isLoginView, setIsLoginView] = useState(true);
+  const [token, setToken] = useState<string>(localStorage.getItem('token') || '');
+  const [email, setEmail] = useState<string>('');
+  const [password, setPassword] = useState<string>('');
+  const [isLoginView, setIsLoginView] = useState<boolean>(true);
   
-  const [ticker, setTicker] = useState('');
-  const [stock, setStock] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [topStocks, setTopStocks] = useState([]);
+  const [ticker, setTicker] = useState<string>('');
+  const [stock, setStock] = useState<StockData | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string>('');
+  const [topStocks, setTopStocks] = useState<TopStock[]>([]);
 
-  const [activeView, setActiveView] = useState('dashboard'); // 'dashboard' or 'admin'
-  const [incidents, setIncidents] = useState([]);
+  const [activeView, setActiveView] = useState<'dashboard' | 'admin'>('dashboard');
+  const [incidents, setIncidents] = useState<Incident[]>([]);
 
-  // --- Article Reader State ---
-  const [activeArticle, setActiveArticle] = useState(null);
-  const [articleLoading, setArticleLoading] = useState(false);
-  const [articleError, setArticleError] = useState('');
+  const [activeArticle, setActiveArticle] = useState<ActiveArticle | null>(null);
+  const [articleLoading, setArticleLoading] = useState<boolean>(false);
+  const [articleError, setArticleError] = useState<string>('');
 
   useEffect(() => {
     if (token) {
-      fetch('http://127.0.0.1:5000/api/top-stocks', {
+      fetch('http://127.0.0.1:5000/api/stock/top-stocks', {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       .then(res => res.json())
@@ -31,7 +72,7 @@ function App() {
     }
   }, [token]);
 
-  const handleAuth = async (e) => {
+  const handleAuth = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
     const endpoint = isLoginView ? '/api/auth/login' : '/api/auth/register';
@@ -52,7 +93,9 @@ function App() {
         alert("Registration successful! Please login.");
         setIsLoginView(true);
       }
-    } catch (err) { setError(err.message); }
+    } catch (err: any) { 
+        setError(err.message); 
+    }
   };
 
   const fetchIncidents = async () => {
@@ -67,19 +110,18 @@ function App() {
     }
   };
 
-  const updateIncidentStatus = async (id, action) => {
+  const updateIncidentStatus = async (id: string, action: 'acknowledge' | 'resolve') => {
     try {
       await fetch(`http://127.0.0.1:5000/api/admin/incidents/${id}/${action}`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      fetchIncidents(); // Refresh the list instantly after clicking
+      fetchIncidents(); 
     } catch (err) {
       console.error(`Failed to ${action} incident:`, err);
     }
   };
 
-  // When we switch to the admin view, automatically fetch the incidents
   useEffect(() => {
     if (activeView === 'admin' && token) fetchIncidents();
   }, [activeView, token]);
@@ -92,7 +134,7 @@ function App() {
     localStorage.removeItem('token');
   };
 
-  const handleSearch = async (e) => {
+  const handleSearch = async (e: FormEvent) => {
     e.preventDefault();
     const cleanTicker = ticker.trim().toUpperCase();
     if (!cleanTicker) return;
@@ -101,27 +143,25 @@ function App() {
     setError('');
     
     try {
-      const response = await fetch(`http://127.0.0.1:5000/api/stock/${cleanTicker}`, {
+      const response = await fetch(`http://127.0.0.1:5000/api/stock/search/${cleanTicker}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Server error');
       setStock(data);
-    } catch (err) {
+    } catch (err: any) {
       setError(err.message);
       if (err.message.includes("Invalid or expired")) handleLogout();
     } finally { setLoading(false); }
   };
 
-  // --- Fetch and Read Article ---
-  const readArticle = async (article) => {
-    // UPDATED: Now securely tracking the URL fallback string inside state
+  const readArticle = async (article: NewsArticle) => {
     setActiveArticle({ title: article.title, publisher: article.publisher, url: article.link, content: null });
     setArticleLoading(true);
     setArticleError('');
 
     try {
-      const response = await fetch(`http://127.0.0.1:5000/api/read-article`, {
+      const response = await fetch(`http://127.0.0.1:5000/api/stock/read-article`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -133,8 +173,8 @@ function App() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to fetch article');
       
-      setActiveArticle(prev => ({ ...prev, content: data.paragraphs }));
-    } catch (err) {
+      setActiveArticle(prev => prev ? { ...prev, content: data.paragraphs } : null);
+    } catch (err: any) {
       setArticleError(err.message);
     } finally {
       setArticleLoading(false);
@@ -143,6 +183,9 @@ function App() {
 
   const isPositive = stock?.change && !stock.change.startsWith('-');
 
+  // The JSX returned remains EXACTLY the same as your previous version!
+  // ... Paste your standard return(...) block here.
+  
   if (!token) {
     return (
       <div style={{ maxWidth: '400px', margin: '60px auto', fontFamily: 'system-ui', padding: '20px' }}>
@@ -356,7 +399,6 @@ function App() {
             <div style={{ padding: '30px', overflowY: 'auto', flexGrow: 1 }}>
               {articleLoading && <div style={{ textAlign: 'center', padding: '40px', fontSize: '18px', color: '#666' }}>Scraping article content...</div>}
               
-              {/* UPDATED: Fallback UI offering a direct connection button if web scraper is blocked */}
               {articleError && (
                 <div style={{ textAlign: 'center', marginTop: '20px' }}>
                   <div style={{ color: '#dc3545', backgroundColor: '#f8d7da', padding: '15px', borderRadius: '6px', marginBottom: '20px' }}>
